@@ -1,25 +1,26 @@
-function out = AILI_pipeline(z, newH, newW)
+function out = AILI_pipeline(z, newH, newW, M, N)
 % AILI 2D interpolation (RGB/Gray both supported)
 % z: input image (H×W or H×W×3), any numeric
 % out: newH × newW (gray) or newH × newW × 3 (RGB), double in [0,1]
 
-    z = im2double(z);
+    
 
     % --- RGB 支援：偵測 3 通道就逐通道處理 ---
     if ndims(z) == 3 && size(z,3) == 3
-        out = zeros(newH, newW, 3);
+        out = zeros(newH, newW, 3, class(z));
         for c = 1:3
-            out(:,:,c) = AILI_single(z(:,:,c), newH, newW);
+            out(:,:,c) = AILI_single(z(:,:,c), newH, newW, M, N);
         end
     else
-        out = AILI_single(z, newH, newW);
+        out = AILI_single(z, newH, newW, M, N);
     end
 end
 
 % ===== 單通道核心（你的原始演算法，僅修正 xi/yi 的 step 用法） =====
-function out = AILI_single(z, newH, newW)
+function out = AILI_single(z, newH, newW, M, N)
     [H, W] = size(z);
     out = zeros(newH, newW);
+    %M = -0.15; N = 1.175;
 
     % 複製邊界填充（上下左右各 +2）
     zp = padarray(z, [2 2], 'replicate', 'both');
@@ -46,11 +47,11 @@ function out = AILI_single(z, newH, newW)
 
             if yi_Is_At_Left
                 yp = yi - yc;
-                yM = -0.15; yN = 1.175; yH = yp + 1;
+                yM = M; yN = N; yH = yp + 1;
                 Vc1 = f(3,1); Vc2 = f(3,2); Vc3 = f(3,3); Vc4 = f(3,4);
             else
                 yp = yi - yf;
-                yM = 1.175; yN = -0.15; yH = yp - 1;
+                yM = N; yN = M; yH = yp - 1;
                 Vc1 = f(2,1); Vc2 = f(2,2); Vc3 = f(2,3); Vc4 = f(2,4);
             end
 
