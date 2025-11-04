@@ -3,11 +3,14 @@
 % 說明：
 %   - PSNR/SSIM/FSIM：全部直接以 RGB 三通道計算（不轉灰階）
 
-close all; clc;
+close all;home;clc;clear;
 
 %% 路徑設定
-baseDir = 'C:\Users\F114112124\Desktop\Image_Super_Resolution\Classical\Set14'; %加入dataset目錄路徑*(Set5或Set14)
+baseDir = 'C:\Users\F114112124\Desktop\Image_Super_Resolution\Classical\Set5'; %加入dataset目錄路徑*(Set5或Set14)
 gtDir   = fullfile(baseDir, 'GTmod12'); %此為compare_img所在目錄
+
+doShave = true; % 是否(true or false)進行邊界裁切 (Shave/crop)
+RGBtoY = true; % 是否做RGB to Y
 
 %以下設定個別input_img目錄以及對應的縮放倍率
 lrInfo = { ...
@@ -70,20 +73,37 @@ for i = 1:numel(gtFiles)
 
         % 以 GT 尺寸為目標，跑 AILI（支援 RGB/Gray）
         scaledColor = AILI_pipeline(lrColor, Hgt, Wgt);
+        %scaledColor = imresize(lrColor, scale, 'bicubic');
+        % 是否做RGB to Y
+        if RGBtoY
+            gtEval = RGB2YIQ(gtColor);
+            srEval = RGB2YIQ(scaledColor);
+        else
+            gtEval = gtColor;
+            srEval = scaledColor;
+        end
+        gtUnit8 = im2uint8(gtEval);    % 0–255, uint8
+        srUnit8 = im2uint8(srEval);
+
+        % 做邊界像素的shave
+        if doShave 
+            [gtUnit8, srUnit8, used_shave] = Shave_calc(gtUnit8, srUnit8, scale);
+        end
 
         % 尺寸保險（若 AILI 回傳尺寸與 GT 略有差異）
-        if size(scaledColor,1) ~= Hgt || size(scaledColor,2) ~= Wgt
-            scaledColor = imresize(scaledColor, [Hgt, Wgt], 'bicubic');
-        end
+        %if size(scaledColor,1) ~= Hgt || size(scaledColor,2) ~= Wgt
+        %    scaledColor = imresize(scaledColor, [Hgt, Wgt], 'bicubic');
+        %end
+
         % 通道保險
-        if size(scaledColor,3) ~= 3
-            scaledColor = repmat(scaledColor,1,1,3);
-        end
+        %if size(srEval,3) ~= 3
+        %    srEval = repmat(srEval,1,1,3);
+        %end
 
         % ===== 指標（全部以 RGB 計算） =====
-        psnr_val = PSNRcalc(gtColor,  scaledColor);   % RGB
-        ssim_val = SSIMcalc(gtColor,  scaledColor);   % RGB
-        fsim_val = FSIMcalc(gtColor,  scaledColor);   % RGB
+        psnr_val = PSNRcalc(gtUnit8,  srUnit8);   % RGB
+        ssim_val = SSIMcalc(gtUnit8,  srUnit8);   % RGB
+        fsim_val = FSIMcalc(gtUnit8,  srUnit8);   % RGB
 
         % 累積
         Image{end+1,1} = baseName; %#ok<SAGROW>
@@ -118,10 +138,10 @@ TSum = table(SumImage, SumScale, MeanPSNR, MeanSSIM, MeanFSIM, ...
 
 % 輸出 CSV（依 scale→image 排序）
 T_sorted = sortrows(T, {'scale','image'});
-perImageCsv_byScale = fullfile(baseDir, 'metrics_per_image.csv');
+perImageCsv_byScale = fullfile(baseDir, 'AILI_metrics_per_image.csv');
 writetable(T_sorted, perImageCsv_byScale);
 
-summaryCsv  = fullfile(baseDir, 'metrics_summary.csv');
+summaryCsv  = fullfile(baseDir, 'AILI_metrics_summary.csv');
 writetable(TSum, summaryCsv);
 
 fprintf('完成！\n- 逐圖(依Scale分組)：%s\n- 各Scale平均：%s\n', ...
